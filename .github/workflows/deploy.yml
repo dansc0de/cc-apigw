@@ -9,8 +9,8 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: demo-tasks
-  LAMBDA_FUNCTION: demo-tasks
+  ECR_REPOSITORY: apigw/tasks
+  LAMBDA_FUNCTION: mock-tasks
 
 jobs:
   deploy:
