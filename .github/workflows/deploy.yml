@@ -1,4 +1,4 @@
-name: Deploy Lambda to ECR
+name: Deploy Lambdas to ECR
 
 on:
   push:
@@ -9,13 +9,10 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: apigw/tasks
-  LAMBDA_FUNCTION: mock-tasks
 
 jobs:
-  deploy:
+  deploy-tasks:
     runs-on: ubuntu-latest
-
     steps:
       - name: checkout code
         uses: actions/checkout@v4
@@ -31,21 +28,59 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: build, tag, and push image to ecr
-        working-directory: demo/lambda
+      - name: build, tag, and push tasks image
+        working-directory: demo/lambda/tasks
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPOSITORY: apigw/tasks
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build --platform linux/amd64 --provenance=false -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-      - name: update lambda function
+      - name: update tasks lambda
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           aws lambda update-function-code \
-            --function-name $LAMBDA_FUNCTION \
-            --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            --function-name mock-tasks \
+            --image-uri $ECR_REGISTRY/apigw/tasks:$IMAGE_TAG
+
+  deploy-authorizer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: configure aws credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: login to ecr
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: build, tag, and push authorizer image
+        working-directory: demo/lambda/authorizer
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          ECR_REPOSITORY: apigw/authorizer
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --platform linux/amd64 --provenance=false -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: update authorizer lambda
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          aws lambda update-function-code \
+            --function-name mock-authorizer \
+            --image-uri $ECR_REGISTRY/apigw/authorizer:$IMAGE_TAG
